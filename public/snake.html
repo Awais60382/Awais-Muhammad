@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snake – gecko-games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#090d16;--ink:#EDEFF2;--dim:#8792a6;--c:#7CFC6A}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;min-height:100vh;color:var(--ink);font-family:'Space Mono',ui-monospace,monospace;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(28px + env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));background:radial-gradient(ellipse at 50% 0%,#131b30,var(--bg) 60%)}
+a.back{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:14px;color:var(--dim);text-decoration:none;font-size:13px}
+h1{font-family:'Press Start 2P',monospace;font-size:clamp(16px,4vw,24px);color:var(--c);text-shadow:0 0 16px var(--c);margin:8px 0 0;text-align:center;line-height:1.4}
+.hud{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--dim);line-height:1.8;text-align:center}.hud b{color:var(--c)}
+.hint{font-size:11px;color:var(--dim);text-align:center}
+canvas,.box{border:2px solid var(--c);border-radius:10px;background:#0d1322;max-width:100%;touch-action:none}
+canvas{width:min(360px,92vw);height:auto}
+button.b{font-family:'Press Start 2P',monospace;font-size:10px;padding:10px 18px;border:2px solid var(--c);border-radius:8px;background:transparent;color:var(--c);cursor:pointer}
+button.b:hover{background:var(--c);color:var(--bg)}
+</style><link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="gecko-games">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>
+</head><body>
+<a class='back' href='/'>← Back</a>
+<h1>Snake</h1>
+<div class="hud" id="hud"></div>
+<canvas id="cv" width="600" height="600"></canvas><button class="b" onclick="reset()">Restart</button>
+<div class="hint">Move the mouse (or drag a finger) to lead the snake, or use the arrow keys / WASD. Eat the fruit to grow. The edges wrap around. P or Space to pause.</div>
+<script>
+const rnd=n=>Math.floor(Math.random()*n),$=id=>document.getElementById(id);
+const B=k=>{try{return+localStorage[k]||0}catch(e){return 0}},SB=(k,v)=>{try{localStorage[k]=v}catch(e){}};
+const cv=$('cv'),c=cv.getContext('2d');c.setTransform(2,0,0,2,0,0);
+// apple, banana, grapes, strawberry, orange, watermelon, cherries, pineapple, peach, kiwi, lemon, pear
+const N=15,S=20,SPEED=210,FN=3,FRUIT=['\u{1F34E}','\u{1F34C}','\u{1F347}','\u{1F353}','\u{1F34A}','\u{1F349}','\u{1F352}','\u{1F34D}','\u{1F351}','\u{1F95D}','\u{1F34B}','\u{1F350}'];
+let s,prev,d,q,fs=[],sc,run,paused,tg=null,acc=0,lastT=0,best=B('snake');
+
+// keep FN fruits on the board, never on the snake or on each other
+function food(){let t=0;while(fs.length<FN&&t++<400){
+ const p={x:rnd(N),y:rnd(N),e:FRUIT[rnd(FRUIT.length)],ph:Math.random()*6.28};
+ if(!s.some(o=>o.x==p.x&&o.y==p.y)&&!fs.some(o=>o.x==p.x&&o.y==p.y))fs.push(p)}}
+function hud(){$('hud').innerHTML='Score <b>'+sc+'</b> \u00b7 Best <b>'+best+'</b>'}
+function reset(){s=[{x:7,y:7},{x:6,y:7},{x:5,y:7}];prev=s.map(p=>({...p}));d={x:1,y:0};q=[];sc=0;run=1;paused=0;acc=0;fs=[];food();hud()}
+
+// queue up to 2 turns so quick key presses aren't lost. Returns true if the direction is accepted.
+function dir(k){const m=[[-1,0],[1,0],[0,-1],[0,1]][k],l=q.length?q[q.length-1]:d;
+ if(m[0]==l.x&&m[1]==l.y)return true;
+ if(m[0]==-l.x&&m[1]==-l.y||q.length>=2)return false;
+ q.push({x:m[0],y:m[1]});return true}
+const KEYS={arrowleft:0,a:0,arrowright:1,d:1,arrowup:2,w:2,arrowdown:3,s:3};
+addEventListener('keydown',e=>{const key=e.key.toLowerCase(),k=KEYS[key];
+ if(k!=null){e.preventDefault();tg=null;if(run&&!paused)dir(k);return}
+ if(key==' '||key=='p'){e.preventDefault();if(!run)reset();else paused=!paused}});
+const aim=e=>{const r=cv.getBoundingClientRect();tg={x:Math.floor((e.clientX-r.left)/r.width*N),y:Math.floor((e.clientY-r.top)/r.height*N)}};
+cv.addEventListener('pointermove',aim);cv.addEventListener('pointerdown',aim);cv.onclick=()=>{if(!run)reset()};
+function steer(){if(!tg||q.length)return;const H=s[0],wd=v=>{v=((v%N)+N)%N;return v>N/2?v-N:v},dx=wd(tg.x-H.x),dy=wd(tg.y-H.y);if(!dx&&!dy)return;
+ const hor=[dx>0?1:0,dx],ver=[dy>0?3:2,dy],o=Math.abs(dx)>=Math.abs(dy)?[hor,ver]:[ver,hor];
+ for(const[k,v]of o)if(v&&dir(k))return}
+
+function step(){steer();if(q.length)d=q.shift();
+ const h={x:(s[0].x+d.x+N)%N,y:(s[0].y+d.y+N)%N};
+ if(s.some(p=>p.x==h.x&&p.y==h.y)){run=0;prev=s.map(p=>({...p}));if(sc>best){best=sc;SB('snake',best)}hud();return}
+ prev=s.map(p=>({...p}));s.unshift(h);
+ const fi=fs.findIndex(o=>o.x==h.x&&o.y==h.y);
+ if(fi>=0){sc++;fs.splice(fi,1);food();prev.push({...prev[prev.length-1]});hud()}else s.pop()}
+
+// ---- drawing ----
+function chaikin(p,n){for(let k=0;k<n;k++){const o=[p[0]];for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];o.push({x:.75*a.x+.25*b.x,y:.75*a.y+.25*b.y},{x:.25*a.x+.75*b.x,y:.25*a.y+.75*b.y})}o.push(p[p.length-1]);p=o}return p}
+function resample(p,st){const o=[{x:p[0].x,y:p[0].y}];let need=st;
+ for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);let pos=0;
+  while(len-pos>=need){pos+=need;o.push({x:a.x+dx*pos/len,y:a.y+dy*pos/len});need=st}need-=len-pos}
+ return o}
+function circ(x,y,r){c.beginPath();c.arc(x,y,r,0,7);c.fill()}
+function drawSnake(t,now){
+ const cur=[];s.forEach((p,i)=>{let x=p.x,y=p.y;if(i){const a=cur[i-1];x+=Math.round((a.x-x)/N)*N;y+=Math.round((a.y-y)/N)*N}cur.push({x,y})});
+ const raw=cur.map((p,i)=>{const q=prev[i],px=q.x+Math.round((p.x-q.x)/N)*N,py=q.y+Math.round((p.y-q.y)/N)*N;return{x:(px+(p.x-px)*t)*S+10,y:(py+(p.y-py)*t)*S+10}});
+ const xs=raw.map(p=>p.x),ys=raw.map(p=>p.y),x0=Math.min(...xs)-14,x1=Math.max(...xs)+14,y0=Math.min(...ys)-14,y1=Math.max(...ys)+14;
+ // thick neck, then a long smooth taper to a pointed tail
+ const pts=resample(chaikin(raw,3),2.5),n=pts.length,R=i=>{const f=i/n;return f<.12?8.6:Math.max(1.6,8.6-7*Math.pow((f-.12)/.88,1.15))};
+ // draw extra copies across the edges so the snake slides out one side and in the other
+ for(let ox=-600;ox<=600;ox+=300)for(let oy=-600;oy<=600;oy+=300){if(x1+ox<0||x0+ox>300||y1+oy<0||y0+oy>300)continue;c.save();c.translate(ox,oy);paintSnake(pts,n,R,now);c.restore()}}
+function paintSnake(pts,n,R,now){
+ c.fillStyle='rgba(0,0,0,.28)';for(let i=n-1;i>=0;i--)circ(pts[i].x+1.5,pts[i].y+2.5,R(i)+1);   // shadow
+ c.fillStyle='#0f4a1a';for(let i=n-1;i>=0;i--)circ(pts[i].x,pts[i].y,R(i)+1.5);                   // outline
+ for(let i=n-1;i>=0;i--){const fr=i/n;c.fillStyle='hsl('+(112+16*fr)+','+(62-12*fr)+'%,'+(48-12*fr)+'%)';circ(pts[i].x,pts[i].y,R(i))}   // body colour
+ c.fillStyle='rgba(215,255,160,.22)';for(let i=n-1;i>=0;i--)circ(pts[i].x-.5,pts[i].y-R(i)*.12,R(i)*.55);   // lighter centre stripe
+ c.fillStyle='rgba(255,255,255,.16)';for(let i=n-1;i>=0;i--)circ(pts[i].x-.8,pts[i].y-R(i)*.42,R(i)*.28);    // shine
+ // diamond pattern along the back
+ for(let i=7;i<n-8;i+=9){const a=pts[i-1],b=pts[i+1],tx=b.x-a.x,ty=b.y-a.y,l=Math.hypot(tx,ty)||1,ux=tx/l,uy=ty/l,r=R(i),p=pts[i];
+  c.beginPath();c.moveTo(p.x+ux*r*.95,p.y+uy*r*.95);c.lineTo(p.x-uy*r*.68,p.y+ux*r*.68);c.lineTo(p.x-ux*r*.95,p.y-uy*r*.95);c.lineTo(p.x+uy*r*.68,p.y-ux*r*.68);c.closePath();
+  c.fillStyle='rgba(8,64,28,.5)';c.fill();c.strokeStyle='rgba(215,255,160,.4)';c.lineWidth=.7;c.stroke()}
+ // head
+ const hx=pts[0].x,hy=pts[0].y,b=pts[Math.min(5,n-1)],ang=Math.atan2(hy-b.y,hx-b.x)||Math.atan2(d.y,d.x);
+ c.save();c.translate(hx,hy);c.rotate(ang);c.lineCap='round';c.lineJoin='round';
+ if(run&&Math.sin(now/130)>.25){c.strokeStyle='#ff3b4d';c.lineWidth=1.6;c.beginPath();c.moveTo(14,0);c.lineTo(20,0);c.lineTo(24,-3);c.moveTo(20,0);c.lineTo(24,3);c.stroke()}
+ c.beginPath();c.moveTo(-7,-7.6);c.bezierCurveTo(3,-11.8,13,-7,15.5,0);c.bezierCurveTo(13,7,3,11.8,-7,7.6);c.closePath();
+ c.strokeStyle='#0f4a1a';c.lineWidth=2.8;c.stroke();
+ const g=c.createRadialGradient(2,-3,1,2,0,15);g.addColorStop(0,'#a4f880');g.addColorStop(1,'#37ad42');
+ c.fillStyle=g;c.fill();
+ c.strokeStyle='rgba(8,64,28,.45)';c.lineWidth=1.5;c.beginPath();c.moveTo(-4.5,-3.6);c.lineTo(1.5,0);c.lineTo(-4.5,3.6);c.stroke();   // head marking
+ c.fillStyle='rgba(255,255,255,.2)';c.beginPath();c.ellipse(8,-3.2,4,1.5,-.15,0,7);c.fill();
+ c.fillStyle='rgba(0,0,0,.65)';circ(12.4,-2.2,.8);circ(12.4,2.2,.8);   // nostrils
+ for(const k of[-1,1]){const ey=k*5.4;
+  c.fillStyle='#fff7a0';c.strokeStyle='#0f4a1a';c.lineWidth=1;c.beginPath();c.arc(4,ey,3.3,0,7);c.fill();c.stroke();
+  if(run){c.fillStyle='#111';c.beginPath();c.ellipse(4.6,ey,.9,2.5,0,0,7);c.fill();c.fillStyle='#fff';circ(3.5,ey-1.2,.7)}
+  else{c.strokeStyle='#000';c.lineWidth=1.1;c.beginPath();c.moveTo(2.8,ey-1.6);c.lineTo(5.2,ey+1.6);c.moveTo(5.2,ey-1.6);c.lineTo(2.8,ey+1.6);c.stroke()}}
+ c.restore()}
+function drawFruit(now){c.save();c.font='16px serif';c.textAlign='center';c.textBaseline='middle';
+ for(const o of fs){const cx=o.x*S+10,cy=o.y*S+10,w=Math.sin(now/280+o.ph);
+  c.fillStyle='rgba(255,255,255,.06)';circ(cx,cy,9.5);
+  c.fillStyle='rgba(0,0,0,.28)';c.beginPath();c.ellipse(cx,cy+8,5.5-w*.6,2,0,0,7);c.fill();
+  c.fillStyle='#fff';c.fillText(o.e,cx,cy+1-w*1.5)}
+ c.restore()}
+function draw(t,now){
+ c.fillStyle='#0d1322';c.fillRect(0,0,300,300);
+ c.fillStyle='rgba(255,255,255,.025)';for(let y=0;y<N;y++)for(let x=0;x<N;x++)if((x+y)%2)c.fillRect(x*S,y*S,S,S);
+ drawFruit(now);
+ drawSnake(t,now);
+ if(paused||!run){c.fillStyle='rgba(0,0,0,.6)';c.fillRect(0,0,300,300);c.fillStyle='#fff';c.font='16px monospace';c.textAlign='center';
+  c.fillText(paused?'Paused \u2013 P or Space':'Game over \u2013 tap or Space',150,150)}}
+function frame(now){const dt=Math.min(50,now-(lastT||now));lastT=now;
+ if(run&&!paused){acc+=dt;if(acc>=SPEED){acc-=SPEED;step()}}
+ draw(run?acc/SPEED:1,now);requestAnimationFrame(frame)}
+reset();requestAnimationFrame(frame);
+</script></body></html>

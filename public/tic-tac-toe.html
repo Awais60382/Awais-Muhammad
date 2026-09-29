@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tic Tac Toe – gecko-games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#090d16;--ink:#EDEFF2;--dim:#8792a6;--amber:#FFB020;--cyan:#4ECDC4;
+  --x:#FF6B6B;--o:#4ECDC4;--grid:#2a3550;--cell-bg:#0d1322;--glow-x:rgba(255,107,107,.4);--glow-o:rgba(78,205,196,.4)}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{min-height:100vh;color:var(--ink);font-family:'Space Mono',ui-monospace,monospace;
+  display:flex;flex-direction:column;align-items:center;
+  padding:calc(30px + env(safe-area-inset-top,0px)) 16px calc(30px + env(safe-area-inset-bottom,0px));
+  background:radial-gradient(ellipse at 50% 0%,#131b30,var(--bg) 60%)}
+a.back{position:absolute;top:16px;left:16px;color:var(--dim);text-decoration:none;font-size:13px;
+  transition:color .2s}
+a.back:hover{color:var(--ink)}
+h1{font-family:'Press Start 2P',monospace;font-size:clamp(16px,4vw,26px);color:var(--amber);
+  text-shadow:0 0 18px rgba(255,176,32,.45);margin-bottom:8px;text-align:center;line-height:1.4}
+.subtitle{color:var(--dim);font-size:12px;margin-bottom:24px;text-align:center}
+
+/* Mode selector */
+.modes{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+.modes button{font-family:'Press Start 2P',monospace;font-size:9px;padding:10px 16px;
+  border:2px solid var(--grid);border-radius:8px;background:var(--cell-bg);color:var(--dim);
+  cursor:pointer;transition:all .2s;line-height:1.4}
+.modes button:hover{border-color:var(--amber);color:var(--ink)}
+.modes button.active{border-color:var(--amber);color:var(--amber);box-shadow:0 0 14px rgba(255,176,32,.25)}
+
+/* Difficulty selector */
+.difficulty{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+.difficulty button{font-family:'Space Mono',monospace;font-size:11px;padding:6px 14px;
+  border:1px solid var(--grid);border-radius:6px;background:var(--cell-bg);color:var(--dim);
+  cursor:pointer;transition:all .2s}
+.difficulty button:hover{border-color:var(--cyan);color:var(--ink)}
+.difficulty button.active{border-color:var(--cyan);color:var(--cyan)}
+.difficulty.hidden{display:none}
+
+/* Scoreboard */
+.scoreboard{display:flex;gap:24px;margin-bottom:20px;font-family:'Press Start 2P',monospace;font-size:10px}
+.score-item{text-align:center;line-height:1.8}
+.score-item .label{color:var(--dim);font-size:8px}
+.score-item .value{font-size:16px}
+.score-item.x .value{color:var(--x);text-shadow:0 0 10px var(--glow-x)}
+.score-item.o .value{color:var(--o);text-shadow:0 0 10px var(--glow-o)}
+.score-item.draw .value{color:var(--amber)}
+
+/* Turn indicator */
+.turn{font-family:'Press Start 2P',monospace;font-size:11px;margin-bottom:16px;min-height:22px;
+  text-align:center;transition:color .2s}
+.turn.x{color:var(--x);text-shadow:0 0 12px var(--glow-x)}
+.turn.o{color:var(--o);text-shadow:0 0 12px var(--glow-o)}
+.turn.win{color:var(--amber);text-shadow:0 0 16px rgba(255,176,32,.5);animation:pulse .6s ease-in-out infinite alternate}
+.turn.draw-msg{color:var(--dim)}
+
+/* Grid */
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:min(340px,85vw);
+  aspect-ratio:1;margin-bottom:24px}
+.cell{background:var(--cell-bg);border:2px solid var(--grid);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:border-color .15s,background .15s,transform .1s;position:relative;overflow:hidden}
+.cell:hover:not(.taken):not(.locked){border-color:var(--dim);background:#111a2e}
+.cell:active:not(.taken):not(.locked){transform:scale(.95)}
+.cell.taken{cursor:default}
+.cell.locked{cursor:default}
+.cell.win-cell{animation:winPulse .5s ease-in-out infinite alternate}
+
+/* X and O marks */
+.cell svg{width:55%;height:55%;opacity:0;transform:scale(.3) rotate(-90deg);
+  transition:opacity .25s,transform .35s cubic-bezier(.34,1.56,.64,1)}
+.cell.taken svg{opacity:1;transform:scale(1) rotate(0deg)}
+
+/* Animations */
+@keyframes pulse{0%{opacity:.7}100%{opacity:1}}
+@keyframes winPulse{0%{box-shadow:inset 0 0 12px rgba(255,176,32,.15)}100%{box-shadow:inset 0 0 24px rgba(255,176,32,.3)}}
+@keyframes strikeIn{from{stroke-dashoffset:500}to{stroke-dashoffset:0}}
+
+/* Strike line overlay */
+.strike-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.strike-overlay line{stroke:var(--amber);stroke-width:4;stroke-linecap:round;
+  stroke-dasharray:500;animation:strikeIn .4s ease-out forwards;filter:drop-shadow(0 0 8px rgba(255,176,32,.6))}
+
+/* Reset button */
+.reset{font-family:'Press Start 2P',monospace;font-size:10px;padding:12px 24px;
+  border:2px solid var(--amber);border-radius:8px;background:transparent;color:var(--amber);
+  cursor:pointer;transition:all .2s;margin-bottom:12px}
+.reset:hover{background:var(--amber);color:var(--bg);box-shadow:0 0 20px rgba(255,176,32,.3)}
+.reset-scores{font-family:'Space Mono',monospace;font-size:11px;padding:6px 16px;
+  border:1px solid var(--grid);border-radius:6px;background:transparent;color:var(--dim);
+  cursor:pointer;transition:all .2s}
+.reset-scores:hover{border-color:var(--dim);color:var(--ink)}
+
+/* Board wrapper for strike line positioning */
+.board-wrap{position:relative;width:min(340px,85vw)}
+
+@media(max-width:380px){
+  .scoreboard{gap:16px}
+  .score-item .value{font-size:14px}
+  .modes button{font-size:8px;padding:8px 12px}
+  h1{font-size:16px}
+}
+</style>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="gecko-games">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>
+</head>
+<body>
+
+<a class='back' href='/'>← Back</a>
+
+<h1>Tic Tac Toe</h1>
+<p class="subtitle">Classic grid battle — neon edition</p>
+
+<div class="modes">
+  <button id="pvp" class="active" onclick="setMode('pvp')">👥 PvP</button>
+  <button id="pvc" onclick="setMode('pvc')">🤖 vs AI</button>
+</div>
+
+<div class="difficulty hidden" id="diffWrap">
+  <button class="active" data-diff="easy" onclick="setDiff('easy')">Easy</button>
+  <button data-diff="medium" onclick="setDiff('medium')">Medium</button>
+  <button data-diff="hard" onclick="setDiff('hard')">Hard</button>
+</div>
+
+<div class="scoreboard">
+  <div class="score-item x"><div class="label" id="lx">You</div><div class="value" id="sx">0</div></div>
+  <div class="score-item draw"><div class="label">Draw</div><div class="value" id="sd">0</div></div>
+  <div class="score-item o"><div class="label" id="lo">Bot</div><div class="value" id="so">0</div></div>
+</div>
+
+<div class="turn x" id="status">Your turn</div>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+  <svg class="strike-overlay" id="strike" viewBox="0 0 340 340" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<button class="reset" onclick="resetGame()">New Round</button>
+<button class="reset-scores" onclick="resetScores()">Reset Scores</button>
+
+<script>
+const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let board,current,gameOver,mode='pvp',diff='easy',scores={x:0,o:0,d:0};
+
+/* ——— Setup ——— */
+function init(){
+  const el=document.getElementById('board');
+  el.innerHTML='';
+  document.getElementById('strike').innerHTML='';
+  board=Array(9).fill(null);
+  current='x';
+  gameOver=false;
+  updateStatus();
+  for(let i=0;i<9;i++){
+    const c=document.createElement('div');
+    c.className='cell';
+    c.dataset.i=i;
+    c.addEventListener('click',()=>play(i));
+    el.appendChild(c);
+  }
+}
+
+function setMode(m){
+  mode=m;
+  document.getElementById('pvp').classList.toggle('active',m==='pvp');
+  document.getElementById('pvc').classList.toggle('active',m==='pvc');
+  document.getElementById('diffWrap').classList.toggle('hidden',m==='pvp');
+  document.getElementById('lx').textContent=m==='pvc'?'You':'P1';
+  document.getElementById('lo').textContent=m==='pvc'?'Bot':'P2';
+  resetGame();
+}
+
+function setDiff(d){
+  diff=d;
+  document.querySelectorAll('.difficulty button').forEach(b=>b.classList.toggle('active',b.dataset.diff===d));
+  resetGame();
+}
+
+/* ——— Game logic ——— */
+function play(i){
+  if(board[i]||gameOver)return;
+  makeMove(i,current);
+  if(gameOver)return;
+  current=current==='x'?'o':'x';
+  updateStatus();
+  if(mode==='pvc'&&current==='o'&&!gameOver){
+    lockBoard(true);
+    setTimeout(()=>{aiMove();lockBoard(false);},300);
+  }
+}
+
+function makeMove(i,player){
+  board[i]=player;
+  const cell=document.querySelectorAll('.cell')[i];
+  cell.classList.add('taken');
+  cell.innerHTML=player==='x'?svgX():svgO();
+  const wl=checkWin(player);
+  if(wl!==null){
+    gameOver=true;
+    scores[player]++;
+    updateScoreboard();
+    highlightWin(wl);
+    drawStrike(wl);
+    function winLabel(p){
+      if(mode==='pvc') return p==='x'?'You win!':'Bot wins!';
+      return p==='x'?'Player 1 wins!':'Player 2 wins!';
+    }
+    setStatus(winLabel(player),'win');
+  }else if(board.every(c=>c)){
+    gameOver=true;
+    scores.d++;
+    updateScoreboard();
+    setStatus("It's a draw!",'draw-msg');
+  }
+}
+
+function checkWin(p){
+  for(const l of WIN_LINES)if(l.every(i=>board[i]===p))return l;
+  return null;
+}
+
+function highlightWin(line){
+  line.forEach(i=>document.querySelectorAll('.cell')[i].classList.add('win-cell'));
+  lockBoard(true);
+}
+
+function drawStrike(line){
+  const svg=document.getElementById('strike');
+  const positions=[[56,56],[170,56],[284,56],[56,170],[170,170],[284,170],[56,284],[170,284],[284,284]];
+  const[a,b]=[ line[0], line[2] ];
+  const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+  l.setAttribute('x1',positions[a][0]);l.setAttribute('y1',positions[a][1]);
+  l.setAttribute('x2',positions[b][0]);l.setAttribute('y2',positions[b][1]);
+  svg.appendChild(l);
+}
+
+function lockBoard(lock){
+  document.querySelectorAll('.cell').forEach(c=>{if(lock)c.classList.add('locked');else c.classList.remove('locked')});
+}
+
+/* ——— AI ——— */
+function aiMove(){
+  if(gameOver)return;
+  let move;
+  if(diff==='easy')move=aiEasy();
+  else if(diff==='medium')move=Math.random()<.5?aiBest():aiEasy();
+  else move=aiBest();
+  makeMove(move,'o');
+  if(!gameOver){current='x';updateStatus();}
+}
+
+function aiEasy(){
+  const empty=board.map((v,i)=>v===null?i:null).filter(v=>v!==null);
+  return empty[Math.floor(Math.random()*empty.length)];
+}
+
+function aiBest(){
+  let bestScore=-Infinity,bestMove=0;
+  for(let i=0;i<9;i++){
+    if(board[i])continue;
+    board[i]='o';
+    let s=minimax(board,0,false,-Infinity,Infinity);
+    board[i]=null;
+    if(s>bestScore){bestScore=s;bestMove=i;}
+  }
+  return bestMove;
+}
+
+function minimax(b,depth,isMax,alpha,beta){
+  if(checkWin('o')!==null)return 10-depth;
+  if(checkWin('x')!==null)return depth-10;
+  if(b.every(c=>c))return 0;
+  if(isMax){
+    let best=-Infinity;
+    for(let i=0;i<9;i++){if(b[i])continue;b[i]='o';best=Math.max(best,minimax(b,depth+1,false,alpha,beta));b[i]=null;alpha=Math.max(alpha,best);if(beta<=alpha)break;}
+    return best;
+  }else{
+    let best=Infinity;
+    for(let i=0;i<9;i++){if(b[i])continue;b[i]='x';best=Math.min(best,minimax(b,depth+1,true,alpha,beta));b[i]=null;beta=Math.min(beta,best);if(beta<=alpha)break;}
+    return best;
+  }
+}
+
+/* ——— UI helpers ——— */
+function svgX(){return `<svg viewBox="0 0 50 50"><line x1="12" y1="12" x2="38" y2="38" stroke="var(--x)" stroke-width="5" stroke-linecap="round"/><line x1="38" y1="12" x2="12" y2="38" stroke="var(--x)" stroke-width="5" stroke-linecap="round"/></svg>`}
+function svgO(){return `<svg viewBox="0 0 50 50"><circle cx="25" cy="25" r="14" fill="none" stroke="var(--o)" stroke-width="5"/></svg>`}
+
+function turnLabel(p){
+  if(mode==='pvc') return p==='x'?'Your':'Bot\'s';
+  return p==='x'?'Player 1\'s':'Player 2\'s';
+}
+function updateStatus(){
+  const el=document.getElementById('status');
+  el.textContent=`${turnLabel(current)} turn`;
+  el.className='turn '+current;
+}
+function setStatus(msg,cls){
+  const el=document.getElementById('status');
+  el.textContent=msg;
+  el.className='turn '+cls;
+}
+function updateScoreboard(){
+  document.getElementById('sx').textContent=scores.x;
+  document.getElementById('so').textContent=scores.o;
+  document.getElementById('sd').textContent=scores.d;
+}
+function resetGame(){init();}
+function resetScores(){scores={x:0,o:0,d:0};updateScoreboard();init();}
+
+init();
+</script>
+</body>
+</html>

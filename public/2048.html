@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>2048 – gecko-games</title>
+<style>
+:root{--w:min(440px,92vw)}
+*{box-sizing:border-box}html{background:#faf8ef}
+body{margin:0;min-height:100vh;background:#faf8ef;color:#776e65;font-family:"Clear Sans","Helvetica Neue",Arial,sans-serif;font-weight:700;display:flex;flex-direction:column;align-items:center;padding:calc(24px + env(safe-area-inset-top,0px)) 0 calc(24px + env(safe-area-inset-bottom,0px))}
+a.back{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:14px;color:#a39a91;text-decoration:none;font-size:13px}
+.wrap{width:var(--w)}
+.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+h1{margin:0;font-size:clamp(48px,16vw,80px);line-height:1;color:#776e65}
+.scores{display:flex;gap:6px}
+.sb{background:#bbada0;border-radius:4px;padding:6px 14px;text-align:center;color:#fff;font-size:22px;min-width:64px;position:relative}
+.sb span{display:block;font-size:11px;color:#eee4da;letter-spacing:1px}
+.add{position:absolute;left:0;right:0;top:8px;color:rgba(119,110,101,.9);font-size:20px;animation:up .6s forwards;pointer-events:none}
+@keyframes up{to{transform:translateY(-40px);opacity:0}}
+.row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+.row p{margin:0;font-size:15px;font-weight:400;line-height:1.3}
+.btn{background:#8f7a66;color:#f9f6f2;border:0;border-radius:3px;padding:10px 18px;font:inherit;font-size:16px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#9f8a76}
+.board{position:relative;width:var(--w);height:var(--w);background:#bbada0;border-radius:6px;touch-action:none}
+.cell,.tile{position:absolute;width:23%;height:23%;border-radius:3px}
+.cell{background:rgba(238,228,218,.35)}
+.tile{display:flex;align-items:center;justify-content:center;transition:left .12s ease-in-out,top .12s ease-in-out;font-size:calc(var(--w)*.115);color:#776e65;background:#eee4da;z-index:2}
+.tile.mg{z-index:3}
+.tile.new{animation:app .2s .1s backwards}.tile.pop{animation:pop .2s .1s}
+@keyframes app{from{transform:scale(0);opacity:0}}@keyframes pop{50%{transform:scale(1.18)}}
+.v4{background:#ede0c8}.v8{background:#f2b179;color:#f9f6f2}.v16{background:#f59563;color:#f9f6f2}.v32{background:#f67c5f;color:#f9f6f2}.v64{background:#f65e3b;color:#f9f6f2}
+.v128{background:#edcf72;color:#f9f6f2;font-size:calc(var(--w)*.095)}.v256{background:#edcc61;color:#f9f6f2;font-size:calc(var(--w)*.095)}.v512{background:#edc850;color:#f9f6f2;font-size:calc(var(--w)*.095);}
+.v1024{background:#edc53f;color:#f9f6f2;font-size:calc(var(--w)*.075)}.v2048{background:#edc22e;color:#f9f6f2;font-size:calc(var(--w)*.075);box-shadow:0 0 30px 10px rgba(243,215,116,.4)}
+.vbig{background:#3c3a32;color:#f9f6f2;font-size:calc(var(--w)*.06)}
+.ov{position:absolute;inset:0;z-index:10;border-radius:6px;background:rgba(238,228,218,.73);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-size:clamp(36px,11vw,60px);animation:fade .8s}
+.ov.win{background:rgba(237,194,46,.5);color:#f9f6f2}.ov.on{display:flex}.ov div{display:flex;gap:8px}
+@keyframes fade{from{opacity:0}}
+.help{width:var(--w);margin-top:20px;font-size:14px;font-weight:400;line-height:1.5}
+</style><link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="gecko-games">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>
+</head><body>
+<a class='back' href='/'>← Back</a>
+<div class="wrap">
+ <div class="top"><h1>2048</h1><div class="scores"><div class="sb"><span>SCORE</span><b id="sc">0</b></div><div class="sb"><span>BEST</span><b id="bs">0</b></div></div></div>
+ <div class="row"><p>Join the numbers and get to the <b>2048 tile!</b></p><button class="btn" onclick="init()">New Game</button></div>
+</div>
+<div class="board" id="bd"><div class="ov" id="ov"><span id="om"></span><div><button class="btn" id="ob1"></button><button class="btn" onclick="init()">Try again</button></div></div></div>
+<p class="help"><b>HOW TO PLAY:</b> Use your <b>arrow keys</b> (or WASD, or swipe) to move the tiles. Tiles with the same number <b>merge into one</b> when they touch. Add them up to reach <b>2048!</b></p>
+<script>
+const rnd=n=>Math.floor(Math.random()*n),$=id=>document.getElementById(id);
+const B=k=>{try{return+localStorage[k]||0}catch(e){return 0}},SB=(k,v)=>{try{localStorage[k]=v}catch(e){}};
+const bd=$('bd');let T,sc,best=B('g2048'),over,won,keep,uid;
+for(let i=0;i<16;i++){const c=document.createElement('div');c.className='cell';c.style.left=(i%4)*25.667+'%';c.style.top=Math.floor(i/4)*25.667+'%';bd.insertBefore(c,$('ov'))}
+const cls=v=>'tile v'+(v>2048?'big':v);
+function place(t){t.el.style.left=t.c*25.667+'%';t.el.style.top=t.r*25.667+'%'}
+function spawn(){const f=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++)if(!T.some(t=>t.r==r&&t.c==c))f.push([r,c]);if(!f.length)return;
+ const[p,q]=f[rnd(f.length)],t={r:p,c:q,v:Math.random()<.9?2:4};t.el=document.createElement('div');t.el.className=cls(t.v)+' new';t.el.textContent=t.v;place(t);bd.insertBefore(t.el,$('ov'));T.push(t)}
+function init(){(T||[]).forEach(t=>t.el.remove());T=[];sc=0;over=won=keep=0;$('ov').className='ov';upd();spawn();spawn()}
+function upd(){$('sc').textContent=sc;if(sc>best){best=sc;SB('g2048',best)}$('bs').textContent=best}
+function show(w){$('om').textContent=w?'You win!':'Game over!';const b=$('ob1');b.style.display=w?'':'none';b.textContent='Keep going';b.onclick=()=>{keep=1;$('ov').className='ov'};$('ov').className='ov on'+(w?' win':'')}
+function mv(k){if(over)return;let moved=0,gain=0;T.forEach(t=>t.m=0);
+ for(let l=0;l<4;l++){
+  const ts=T.filter(t=>k<2?t.r==l:t.c==l).sort((a,b)=>k==0?a.c-b.c:k==1?b.c-a.c:k==2?a.r-b.r:b.r-a.r);
+  let pos=0,last=null;
+  for(const t of ts){
+   if(last&&last.v==t.v&&!last.m){last.v*=2;last.m=1;gain+=last.v;t.dead=1;t.r=last.r;t.c=last.c;moved=1}
+   else{const nr=k<2?l:(k==2?pos:3-pos),nc=k<2?(k==0?pos:3-pos):l;if(t.r!=nr||t.c!=nc)moved=1;t.r=nr;t.c=nc;last=t;pos++}
+  }}
+ if(!moved)return;
+ T.forEach(place);
+ const dead=T.filter(t=>t.dead);T=T.filter(t=>!t.dead);
+ if(gain){sc+=gain;const a=document.createElement('div');a.className='add';a.textContent='+'+gain;$('sc').parentNode.appendChild(a);setTimeout(()=>a.remove(),600)}
+ setTimeout(()=>{dead.forEach(t=>t.el.remove());T.forEach(t=>{if(t.m){t.el.textContent=t.v;t.el.className=cls(t.v)+' mg pop';}else t.el.className=cls(t.v)});spawn();upd();
+  if(!keep&&!won&&T.some(t=>t.v>=2048)){won=1;show(1)}
+  else if(!T.some(t=>t.v==0)&&T.length==16&&!T.some(t=>T.some(u=>u!==t&&t.v==u.v&&Math.abs(t.r-u.r)+Math.abs(t.c-u.c)==1))){over=1;show(0)}},120);}
+addEventListener('keydown',e=>{const k={ArrowLeft:0,a:0,ArrowRight:1,d:1,ArrowUp:2,w:2,ArrowDown:3,s:3}[e.key];if(k!=null){e.preventDefault();mv(k)}});
+let sx,sy;bd.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+bd.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(Math.max(Math.abs(dx),Math.abs(dy))>20)mv(Math.abs(dx)>Math.abs(dy)?(dx>0?1:0):(dy>0?3:2))},{passive:true});
+init();
+</script></body></html>
