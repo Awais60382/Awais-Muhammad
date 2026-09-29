@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dino Run – gecko-games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#090d16;--ink:#EDEFF2;--dim:#8792a6;--c:#A78BFA}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;min-height:100vh;color:var(--ink);font-family:'Space Mono',ui-monospace,monospace;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(28px + env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));background:radial-gradient(ellipse at 50% 0%,#131b30,var(--bg) 60%)}
+a.back{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:14px;color:var(--dim);text-decoration:none;font-size:13px}
+h1{font-family:'Press Start 2P',monospace;font-size:clamp(16px,4vw,24px);color:var(--c);text-shadow:0 0 16px var(--c);margin:8px 0 0;text-align:center;line-height:1.4}
+.hint{font-size:11px;color:var(--dim);text-align:center;max-width:560px;line-height:1.6}
+canvas{border:2px solid var(--c);border-radius:10px;background:#0d1322;max-width:100%;touch-action:none;width:min(720px,94vw);height:auto}
+</style><link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="gecko-games">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>
+</head><body>
+<a class='back' href='/'>← Back</a>
+<h1>Dino Run</h1>
+<canvas id="cv" width="1200" height="400"></canvas>
+<div class="hint">Space, W or ↑ (or tap the top of the screen) to jump. Hold ↓ or S (or hold the bottom of the screen) to duck. Flying pterodactyls show up after 200 points. P to pause.</div>
+<script>
+const rnd=n=>Math.floor(Math.random()*n),$=id=>document.getElementById(id);
+const B=k=>{try{return+localStorage[k]||0}catch(e){return 0}},SB=(k,v)=>{try{localStorage[k]=v}catch(e){}};
+const cv=$('cv'),c=cv.getContext('2d');c.setTransform(2,0,0,2,0,0);
+const W=600,H=200,G=165,DX=40,SC=3,COL='#A78BFA',CAC='#5fd08a',PT='#ff9f6b';
+const DINO=["......#######.","......##.#####","......########","......########","......#####...","......#######.","#....####.....","#...#####..#..","##.#######.#..","##########.#..",".##########...","..#########...","...#######....","....#####....."];
+const DUCK=["............#######.","............##.#####","............########","#..........#####....","##.##########.......","###########.........",".#########..........","..#######..........."];
+let dy=0,vy=0,dn=0,obs=[],clouds=[],bumps=[],speed=6,dist=0,sc=0,run=0,ready=1,paused=0,gap=300,flash=0,deadAt=0,last=0,best=B('dino');
+
+function reset(){dy=0;vy=0;obs=[];speed=4;dist=0;sc=0;gap=300;flash=0;paused=0;
+ clouds=[0,1,2].map(i=>({x:i*220+rnd(80),y:20+rnd(60),w:40+rnd(30)}));
+ bumps=[];for(let i=0;i<30;i++)bumps.push({x:rnd(W),y:G+6+rnd(22),w:2+rnd(4)})}
+function press(){
+ if(!run&&!ready&&performance.now()-deadAt<450)return;
+ if(!run||ready){reset();run=1;ready=0}
+ paused=0;
+ if(dy==0)vy=10.6}
+function spawn(){
+ if(sc>=200&&Math.random()<.28){obs.push({t:'p',x:W+20,w:52,dy:[10,34,72][rnd(3)],f:0})}
+ else{const big=Math.random()<.5,n=1+rnd(sc>150?3:2),w=big?24:18;obs.push({t:'c',x:W+20,w:w*n,cw:w,n,h:big?46:32,tw:big?9:7})}
+ gap=230+rnd(260)+speed*14}
+function box(o){return o.t=='p'?{x:o.x+4,y:G-o.dy-20,r:o.x+48,b:G-o.dy-4}:{x:o.x+2,y:G-o.h+3,r:o.x+o.w-2,b:G}}
+function update(k){
+ if(dy>0||vy>0){dy+=vy*k;vy-=.6*k*(dn?2.2:1);if(dy<=0){dy=0;vy=0}}
+ dist+=speed*k;const p=sc;sc=dist/10|0;if(sc>p&&sc%100==0)flash=40;if(flash>0)flash-=k;
+ speed=4+Math.min(10,sc/80);
+ if(!obs.length||obs[obs.length-1].x<W-gap)spawn();
+ for(const o of obs){o.x-=speed*k;if(o.f!=null)o.f+=.15*k}
+ obs=obs.filter(o=>o.x+o.w>-10);
+ for(const o of clouds){o.x-=.35*k;if(o.x+o.w<0){o.x=W+rnd(100);o.y=20+rnd(60)}}
+ for(const b of bumps){b.x-=speed*k;if(b.x<-6){b.x=W+rnd(40);b.y=G+6+rnd(22)}}
+ const ducking=dn&&dy==0,d={x:DX+(ducking?4:6),r:DX+(ducking?56:38),y:G-dy-(ducking?26:44),b:G-dy-3};
+ for(const o of obs){const q=box(o);
+  if(d.x<q.r&&d.r>q.x&&d.y<q.b&&d.b>q.y){run=0;deadAt=performance.now();if(sc>best){best=sc;SB('dino',best)}return}}}
+function spr(rows,x,y,col){c.fillStyle=col;rows.forEach((r,j)=>{for(let i=0;i<r.length;i++)if(r[i]=='#')c.fillRect(x+i*SC,y+j*SC,SC,SC)})}
+function drawDino(now){
+ const ducking=dn&&dy==0&&run,step=run&&dy==0?(dist/12|0)%2:0,dead=!run&&!ready;
+ const legs=(x,y)=>{c.fillStyle=COL;c.fillRect(x,y,6,step?6:3);c.fillRect(x+12,y,6,step?3:6)};
+ if(ducking){const y=G-30;spr(DUCK,DX,y,COL);legs(DX+15,y+24);c.fillStyle='#fff';c.fillRect(DX+39,y+3,3,3)}
+ else{const y=G-dy-48;spr(DINO,DX,y,COL);legs(DX+12,y+42);
+  c.fillStyle='rgba(255,255,255,.12)';c.fillRect(DX+6,y+30,12,6);       // belly shade
+  c.fillStyle=dead?'#ff5c5c':'#fff';c.fillRect(DX+24,y+3,3,3)}}
+function drawObs(o){
+ if(o.t=='c'){c.fillStyle=CAC;
+  for(let i=0;i<o.n;i++){const cx=o.x+i*o.cw,tw=o.tw,h=o.h,mx=cx+o.cw/2;
+   c.fillRect(mx-tw/2,G-h+tw/2,tw,h-tw/2);c.beginPath();c.arc(mx,G-h+tw/2,tw/2,0,7);c.fill();
+   c.fillRect(cx+1,G-h*.6,o.cw/2-tw/2+1,4);c.fillRect(cx+1,G-h*.6-9,4,13);
+   c.fillRect(mx,G-h*.4,o.cw/2-1,4);c.fillRect(cx+o.cw-5,G-h*.4-11,4,15)}
+  c.fillStyle='rgba(255,255,255,.14)';for(let i=0;i<o.n;i++)c.fillRect(o.x+i*o.cw+o.cw/2-o.tw/2+1,G-o.h+4,2,o.h-6)}
+ else{const x=o.x,y=G-o.dy-24,up=(o.f|0)%2==0;c.fillStyle=PT;
+  c.fillRect(x+8,y+8,30,9);c.fillRect(x+34,y+6,10,7);
+  c.beginPath();c.moveTo(x+44,y+8);c.lineTo(x+53,y+11);c.lineTo(x+44,y+13);c.fill();
+  c.beginPath();c.moveTo(x+8,y+9);c.lineTo(x,y+12);c.lineTo(x+8,y+15);c.fill();
+  c.beginPath();if(up){c.moveTo(x+14,y+9);c.lineTo(x+30,y+9);c.lineTo(x+20,y-7)}else{c.moveTo(x+14,y+16);c.lineTo(x+30,y+16);c.lineTo(x+20,y+30)}c.fill();
+  c.fillStyle='#fff';c.fillRect(x+38,y+8,2,2)}}
+const pad=n=>String(n).padStart(5,'0');
+function draw(now){
+ c.fillStyle='#0d1322';c.fillRect(0,0,W,H);
+ c.fillStyle='#19233d';for(const o of clouds){c.beginPath();c.ellipse(o.x+o.w/2,o.y,o.w/2,7,0,0,7);c.ellipse(o.x+o.w*.35,o.y-5,o.w*.22,7,0,0,7);c.fill()}
+ c.fillStyle='#4a5570';c.fillRect(0,G,W,2);
+ c.fillStyle='#2b3550';for(const b of bumps)c.fillRect(b.x,b.y-6,b.w,2);
+ obs.forEach(drawObs);drawDino(now);
+ c.font="10px 'Press Start 2P',monospace";c.textAlign='right';c.textBaseline='top';
+ c.fillStyle='#8792a6';c.fillText('HI '+pad(best),W-110,12);
+ if(flash<=0||((flash/5)|0)%2==0){c.fillStyle='#EDEFF2';c.fillText(pad(sc),W-12,12)}
+ if(paused||!run||ready){c.fillStyle='rgba(0,0,0,.45)';c.fillRect(0,0,W,H);c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';
+  c.font="14px 'Press Start 2P',monospace";
+  c.fillText(paused?'PAUSED':ready?'DINO RUN':'GAME OVER',W/2,H/2-14);
+  c.font="9px 'Press Start 2P',monospace";c.fillStyle='#c4cad6';
+  c.fillText(paused?'P to resume':ready?'Space or tap to start':'Space or tap to retry',W/2,H/2+14)}}
+function frame(now){const k=Math.min(3,(now-(last||now))/16.667);last=now;
+ if(run&&!paused&&!ready)update(k);
+ draw(now);requestAnimationFrame(frame)}
+addEventListener('keydown',e=>{const key=e.key.toLowerCase();
+ if(key==' '||key=='arrowup'||key=='w'){e.preventDefault();if(!e.repeat)press();return}
+ if(key=='arrowdown'||key=='s'){e.preventDefault();dn=1;return}
+ if(key=='p'&&run&&!ready){paused=!paused}});
+addEventListener('keyup',e=>{const key=e.key.toLowerCase();if(key=='arrowdown'||key=='s')dn=0});
+cv.addEventListener('pointerdown',e=>{e.preventDefault();const r=cv.getBoundingClientRect();
+ if(run&&!ready&&(e.clientY-r.top)/r.height>.6){dn=1}else press()});
+addEventListener('pointerup',()=>{dn=0});addEventListener('pointercancel',()=>{dn=0});
+document.addEventListener('visibilitychange',()=>{dn=0;if(document.hidden&&run&&!ready)paused=1});
+addEventListener('load',()=>window.focus());cv.addEventListener('pointerdown',()=>window.focus());
+reset();requestAnimationFrame(frame);
+</script></body></html>
